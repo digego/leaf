@@ -1,5 +1,5 @@
 use crate::{
-    markdown::{parse_markdown_with_width, toc::TocEntry},
+    markdown::{append_scroll_padding, parse_markdown_with_width, toc::TocEntry},
     theme::{
         app_theme, current_syntect_theme, current_theme_selection, set_theme_preset,
         set_theme_selection, theme_preset_index, ThemePreset, ThemeSelection, THEME_PRESETS,
@@ -123,7 +123,7 @@ impl App {
 
         let theme = current_syntect_theme(themes);
         let at = app_theme();
-        let parsed = parse_markdown_with_width(
+        let mut parsed = parse_markdown_with_width(
             &self.source,
             ss,
             theme,
@@ -132,6 +132,7 @@ impl App {
             self.file_mode,
             self.code_line_numbers,
         );
+        append_scroll_padding(&mut parsed.lines);
         self.store_theme_preview(preset, &parsed.lines, &parsed.toc);
         self.replace_content(parsed);
     }
@@ -147,7 +148,7 @@ impl App {
             } else {
                 let theme = current_syntect_theme(themes);
                 let at = app_theme();
-                let parsed = parse_markdown_with_width(
+                let mut parsed = parse_markdown_with_width(
                     &self.source,
                     ss,
                     theme,
@@ -156,6 +157,7 @@ impl App {
                     self.file_mode,
                     self.code_line_numbers,
                 );
+                append_scroll_padding(&mut parsed.lines);
                 self.replace_content(parsed);
             }
         }
@@ -214,3 +216,6 @@ impl App {
             .is_some()
     }
 }
+
+
+

@@ -816,10 +816,6 @@ pub(crate) fn parse_markdown_with_width(
         theme_colors,
         render_width,
     );
-    for _ in 0..5 {
-        lines.push(Line::from(""));
-    }
-    state.mark_all_new(lines.len());
     let link_spans = build_link_spans(&lines, &link_urls, theme_colors);
     ParseResult {
         lines,
@@ -915,3 +911,19 @@ fn compute_line_starts(s: &str) -> Vec<usize> {
 fn byte_to_line(line_starts: &[usize], offset: usize) -> usize {
     line_starts.partition_point(|&s| s <= offset).max(1)
 }
+
+/// Number of blank lines appended below the last real content line so the
+/// TUI viewport can scroll past the bottom of the document. This is a
+/// presentation concern owned by the TUI, not the parser, so non-TUI
+/// consumers (e.g. `--inline`) do not see trailing whitespace.
+pub(crate) const TUI_SCROLL_PADDING: usize = 5;
+
+/// Append `TUI_SCROLL_PADDING` blank lines to `lines`. Call this on the
+/// output of [`parse_markdown_with_width`] when the result is destined for
+/// the interactive viewer.
+pub(crate) fn append_scroll_padding(lines: &mut Vec<Line<'static>>) {
+    for _ in 0..TUI_SCROLL_PADDING {
+        lines.push(Line::from(""));
+    }
+}
+

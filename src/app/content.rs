@@ -1,6 +1,7 @@
 use super::App;
 use crate::markdown::{
-    hash_file_contents, hash_str, parse_markdown_with_width, read_file_state, ParseResult,
+    append_scroll_padding, hash_file_contents, hash_str, parse_markdown_with_width,
+    read_file_state, ParseResult,
 };
 use std::{
     path::PathBuf,
@@ -95,7 +96,7 @@ impl App {
         self.file_mode = is_code_file;
         let theme = current_syntect_theme(themes);
         let at = app_theme();
-        let parsed = parse_markdown_with_width(
+        let mut parsed = parse_markdown_with_width(
             &src,
             ss,
             theme,
@@ -104,6 +105,7 @@ impl App {
             self.file_mode,
             self.code_line_numbers,
         );
+        append_scroll_padding(&mut parsed.lines);
 
         let first_load = self.filepath.is_none();
         self.filename = filename;
@@ -138,7 +140,7 @@ impl App {
         let theme = current_syntect_theme(themes);
         let at = app_theme();
         let old_total = self.total();
-        let parsed = parse_markdown_with_width(
+        let mut parsed = parse_markdown_with_width(
             &self.source,
             ss,
             theme,
@@ -147,6 +149,7 @@ impl App {
             self.file_mode,
             self.code_line_numbers,
         );
+        append_scroll_padding(&mut parsed.lines);
         let new_total = parsed.lines.len();
 
         if old_total > 0 {
@@ -218,3 +221,6 @@ impl App {
         true
     }
 }
+
+
+

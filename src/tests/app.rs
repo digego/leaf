@@ -1,7 +1,9 @@
 use super::{test_assets, test_md_theme};
 use crate::app::{App, AppConfig, FileChange};
 use crate::cli::parse_cli;
-use crate::markdown::{hash_str, parse_markdown, parse_markdown_with_width, read_file_state};
+use crate::markdown::{
+    append_scroll_padding, hash_str, parse_markdown, parse_markdown_with_width, read_file_state,
+};
 use crate::*;
 use crossterm::event::KeyEventKind;
 use std::{
@@ -765,8 +767,11 @@ fn sync_render_width_returns_false_when_clamped_width_is_unchanged() {
     let (ss, theme) = test_assets();
     let ts = ThemeSet::load_defaults();
     let source = "One paragraph that does not matter much for this width clamp test.";
-    let (lines, toc, _, _) =
+    let (mut lines, toc, _, _) =
         parse_markdown_with_width(source, &ss, &theme, 20, &test_md_theme(), false, true).into();
+    // Mirror production: the TUI applies scroll padding on top of raw
+    // parser output before constructing the App.
+    append_scroll_padding(&mut lines);
     let mut app = App::new_with_source(
         lines,
         toc,
@@ -782,12 +787,10 @@ fn sync_render_width_returns_false_when_clamped_width_is_unchanged() {
 
     assert!(app.sync_render_width(10, &ss, &ts));
     assert!(!app.sync_render_width(10, &ss, &ts));
-    assert_eq!(
-        app.total(),
-        parse_markdown_with_width(source, &ss, &theme, 20, &test_md_theme(), false, true)
-            .lines
-            .len()
-    );
+    let (mut expected, _, _, _) =
+        parse_markdown_with_width(source, &ss, &theme, 20, &test_md_theme(), false, true).into();
+    append_scroll_padding(&mut expected);
+    assert_eq!(app.total(), expected.len());
 }
 
 #[test]
@@ -873,3 +876,5 @@ fn load_path_activates_watch_from_config() {
     let _ = fs::remove_file(path);
     let _ = fs::remove_file(path2);
 }
+
+
