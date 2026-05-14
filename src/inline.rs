@@ -12,6 +12,7 @@ const MIN_WIDTH: usize = 20;
 pub(crate) struct InlineSpec {
     pub(crate) format: InlineFormat,
     pub(crate) width: Option<usize>,
+    pub(crate) gutter: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,17 +29,24 @@ pub(crate) enum ResolvedFormat {
 }
 
 pub(crate) fn is_inline_spec(value: &str) -> bool {
-    if value.starts_with('-') {
+    if value.starts_with('-') || value.is_empty() {
         return false;
     }
-    let lower = value.to_ascii_lowercase();
-    if lower == "ansi" || lower == "plain" {
-        return true;
+    let parts: Vec<&str> = value.split(':').collect();
+    let lower_first = parts[0].to_ascii_lowercase();
+    let first_is_fmt = lower_first == "ansi" || lower_first == "plain";
+    let first_is_digits =
+        !parts[0].is_empty() && parts[0].bytes().all(|b| b.is_ascii_digit());
+    if !first_is_fmt && !first_is_digits {
+        return false;
     }
-    if value.bytes().all(|b| b.is_ascii_digit()) && !value.is_empty() {
-        return true;
+    let rest_start = if first_is_fmt { 1 } else { 0 };
+    let rest = &parts[rest_start..];
+    if rest.len() > 2 {
+        return false;
     }
-    matches!(lower.split_once(':'), Some((fmt, _)) if fmt == "ansi" || fmt == "plain")
+    rest.iter()
+        .all(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub(crate) fn parse_inline_spec(value: &str) -> Result<InlineSpec> {
@@ -47,27 +55,30 @@ pub(crate) fn parse_inline_spec(value: &str) -> Result<InlineSpec> {
         bail!("Empty inline spec");
     }
 
-    if value.bytes().all(|b| b.is_ascii_digit()) {
-        let width = parse_width(value)?;
-        return Ok(InlineSpec {
-            format: InlineFormat::Auto,
-            width: Some(width),
-        });
-    }
+    let parts: Vec<&str> = value.split(':').collect();
+    let first_is_digits =
+        !parts[0].is_empty() && parts[0].bytes().all(|b| b.is_ascii_digit());
 
-    if let Some((fmt, w)) = value.split_once(':') {
-        let format = parse_format_name(fmt)?;
-        let width = parse_width(w)?;
-        return Ok(InlineSpec {
-            format,
-            width: Some(width),
-        });
-    }
+    let (format, num_parts): (InlineFormat, &[&str]) = if first_is_digits {
+        (InlineFormat::Auto, &parts[..])
+    } else {
+        (parse_format_name(parts[0])?, &parts[1..])
+    };
 
-    let format = parse_format_name(value)?;
+    let (width, gutter) = match num_parts.len() {
+        0 => (None, 0),
+        1 => (Some(parse_width(num_parts[0])?), 0),
+        2 => (
+            Some(parse_width(num_parts[0])?),
+            parse_gutter(num_parts[1])?,
+        ),
+        _ => bail!("Invalid inline spec: {value} (expected [fmt][:width[:gutter]])"),
+    };
+
     Ok(InlineSpec {
         format,
-        width: None,
+        width,
+        gutter,
     })
 }
 
@@ -87,6 +98,11 @@ fn parse_width(s: &str) -> Result<usize> {
         bail!("Width must be a positive integer");
     }
     Ok(w.max(MIN_WIDTH))
+}
+
+fn parse_gutter(s: &str) -> Result<usize> {
+    s.parse::<usize>()
+        .map_err(|_| anyhow::anyhow!("Invalid gutter: {s}"))
 }
 
 pub(crate) fn render_width(spec: &InlineSpec, is_stdout_terminal: bool) -> usize {
@@ -115,19 +131,29 @@ pub(crate) fn write_lines<W: Write>(
     lines: &[Line<'_>],
     format: ResolvedFormat,
     max_width: usize,
+    gutter: usize,
     writer: &mut W,
 ) -> Result<()> {
+    let gutter_bytes = vec![b' '; gutter];
     for line in lines {
         match format {
-            ResolvedFormat::Ansi => write_line_ansi(line, max_width, writer)?,
-            ResolvedFormat::Plain => write_line_plain(line, max_width, writer)?,
+            ResolvedFormat::Ansi => write_line_ansi(line, max_width, &gutter_bytes, writer)?,
+            ResolvedFormat::Plain => write_line_plain(line, max_width, &gutter_bytes, writer)?,
         }
     }
     Ok(())
 }
 
-fn write_line_ansi<W: Write>(line: &Line<'_>, max_width: usize, writer: &mut W) -> Result<()> {
+fn write_line_ansi<W: Write>(
+    line: &Line<'_>,
+    max_width: usize,
+    gutter_bytes: &[u8],
+    writer: &mut W,
+) -> Result<()> {
     let mut col = 0usize;
+    if !gutter_bytes.is_empty() {
+        write_bytes(writer, gutter_bytes)?;
+    }
     for span in &line.spans {
         let style = &span.style;
         let mods = style.add_modifier;
@@ -147,6 +173,9 @@ fn write_line_ansi<W: Write>(line: &Line<'_>, max_width: usize, writer: &mut W) 
                 }
                 write_bytes(writer, b"\n")?;
                 col = 0;
+                if !gutter_bytes.is_empty() {
+                    write_bytes(writer, gutter_bytes)?;
+                }
                 if has_style {
                     write_ansi_style(writer, fg, bg, mods)?;
                 }
@@ -164,14 +193,25 @@ fn write_line_ansi<W: Write>(line: &Line<'_>, max_width: usize, writer: &mut W) 
     Ok(())
 }
 
-fn write_line_plain<W: Write>(line: &Line<'_>, max_width: usize, writer: &mut W) -> Result<()> {
+fn write_line_plain<W: Write>(
+    line: &Line<'_>,
+    max_width: usize,
+    gutter_bytes: &[u8],
+    writer: &mut W,
+) -> Result<()> {
     let mut col = 0usize;
+    if !gutter_bytes.is_empty() {
+        write_bytes(writer, gutter_bytes)?;
+    }
     for span in &line.spans {
         for ch in span.content.chars() {
             let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
             if col + ch_width > max_width && col > 0 {
                 write_bytes(writer, b"\n")?;
                 col = 0;
+                if !gutter_bytes.is_empty() {
+                    write_bytes(writer, gutter_bytes)?;
+                }
             }
             let mut buf = [0u8; 4];
             write_bytes(writer, ch.encode_utf8(&mut buf).as_bytes())?;

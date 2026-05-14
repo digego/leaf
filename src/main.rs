@@ -426,7 +426,7 @@ fn main() -> Result<()> {
         let format = inline::resolve_format(spec, is_tty);
 
         let at = app_theme();
-        let mut parsed = parse_markdown_with_width(
+        let parsed = parse_markdown_with_width(
             &src,
             &ss,
             &theme,
@@ -435,17 +435,21 @@ fn main() -> Result<()> {
             file_mode,
             code_line_numbers,
         );
+        let mut lines = parsed.lines;
 
-        while parsed.lines.last().is_some_and(|l| {
-            l.spans.is_empty() || l.spans.iter().all(|s| s.content.trim().is_empty())
-        }) {
-            parsed.lines.pop();
+        // The parser appends a handful of blank lines so the TUI can scroll
+        // past the last real line. For --inline that's just trailing
+        // whitespace, so trim it.
+        while lines
+            .last()
+            .is_some_and(|l| l.spans.iter().all(|s| s.content.trim().is_empty()))
+        {
+            lines.pop();
         }
-        let lines = parsed.lines;
 
         let stdout = io::stdout();
         let mut writer = io::BufWriter::new(stdout.lock());
-        inline::write_lines(&lines, format, width, &mut writer)?;
+        inline::write_lines(&lines, format, width, spec.gutter, &mut writer)?;
         return Ok(());
     }
 

@@ -187,6 +187,10 @@ leaf --inline ansi README.md
 leaf --inline 60 README.md
 leaf --inline ansi:60 README.md
 
+# Add a 4-character left gutter (width:gutter)
+leaf --inline ansi:60:4 README.md
+leaf --inline 60:4 README.md
+
 # Pipe from stdin
 cat README.md | leaf --inline
 
@@ -484,3 +488,4 @@ If you like **leaf**, consider giving the project a star ⭐
 This project is licensed under the MIT License.
 
 See the [LICENSE](LICENSE) file for details.
+

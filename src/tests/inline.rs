@@ -16,6 +16,7 @@ fn parse_cli_accepts_inline_on_its_own() {
         Some(InlineSpec {
             format: InlineFormat::Auto,
             width: None,
+            gutter: 0,
         })
     );
     assert_eq!(options.file_arg.as_deref(), Some("README.md"));
@@ -35,6 +36,7 @@ fn parse_cli_accepts_inline_with_width() {
         Some(InlineSpec {
             format: InlineFormat::Auto,
             width: Some(50),
+            gutter: 0,
         })
     );
     assert_eq!(options.file_arg.as_deref(), Some("README.md"));
@@ -54,6 +56,7 @@ fn parse_cli_accepts_inline_ansi() {
         Some(InlineSpec {
             format: InlineFormat::Ansi,
             width: None,
+            gutter: 0,
         })
     );
 }
@@ -72,6 +75,7 @@ fn parse_cli_accepts_inline_ansi_with_width() {
         Some(InlineSpec {
             format: InlineFormat::Ansi,
             width: Some(50),
+            gutter: 0,
         })
     );
 }
@@ -90,6 +94,7 @@ fn parse_cli_accepts_inline_plain_with_width() {
         Some(InlineSpec {
             format: InlineFormat::Plain,
             width: Some(80),
+            gutter: 0,
         })
     );
 }
@@ -107,6 +112,7 @@ fn parse_cli_accepts_inline_equals_form() {
         Some(InlineSpec {
             format: InlineFormat::Ansi,
             width: None,
+            gutter: 0,
         })
     );
 }
@@ -124,6 +130,45 @@ fn parse_cli_accepts_inline_equals_with_width() {
         Some(InlineSpec {
             format: InlineFormat::Plain,
             width: Some(50),
+            gutter: 0,
+        })
+    );
+}
+
+#[test]
+fn parse_cli_accepts_inline_ansi_with_width_and_gutter() {
+    let args = vec![
+        "leaf".to_string(),
+        "--inline".to_string(),
+        "ansi:60:4".to_string(),
+        "README.md".to_string(),
+    ];
+    let options = parse_cli(&args).unwrap();
+    assert_eq!(
+        options.inline,
+        Some(InlineSpec {
+            format: InlineFormat::Ansi,
+            width: Some(60),
+            gutter: 4,
+        })
+    );
+}
+
+#[test]
+fn parse_cli_accepts_inline_width_and_gutter() {
+    let args = vec![
+        "leaf".to_string(),
+        "--inline".to_string(),
+        "60:4".to_string(),
+        "README.md".to_string(),
+    ];
+    let options = parse_cli(&args).unwrap();
+    assert_eq!(
+        options.inline,
+        Some(InlineSpec {
+            format: InlineFormat::Auto,
+            width: Some(60),
+            gutter: 4,
         })
     );
 }
@@ -166,6 +211,7 @@ fn parse_cli_inline_without_spec_uses_auto() {
     let spec = options.inline.unwrap();
     assert_eq!(spec.format, InlineFormat::Auto);
     assert_eq!(spec.width, None);
+    assert_eq!(spec.gutter, 0);
     assert_eq!(options.file_arg.as_deref(), Some("README.md"));
 }
 
@@ -176,6 +222,7 @@ fn parse_inline_spec_ansi() {
     let spec = inline::parse_inline_spec("ansi").unwrap();
     assert_eq!(spec.format, InlineFormat::Ansi);
     assert_eq!(spec.width, None);
+    assert_eq!(spec.gutter, 0);
 }
 
 #[test]
@@ -183,6 +230,7 @@ fn parse_inline_spec_plain() {
     let spec = inline::parse_inline_spec("plain").unwrap();
     assert_eq!(spec.format, InlineFormat::Plain);
     assert_eq!(spec.width, None);
+    assert_eq!(spec.gutter, 0);
 }
 
 #[test]
@@ -190,6 +238,7 @@ fn parse_inline_spec_width_only() {
     let spec = inline::parse_inline_spec("50").unwrap();
     assert_eq!(spec.format, InlineFormat::Auto);
     assert_eq!(spec.width, Some(50));
+    assert_eq!(spec.gutter, 0);
 }
 
 #[test]
@@ -197,6 +246,29 @@ fn parse_inline_spec_format_with_width() {
     let spec = inline::parse_inline_spec("plain:80").unwrap();
     assert_eq!(spec.format, InlineFormat::Plain);
     assert_eq!(spec.width, Some(80));
+    assert_eq!(spec.gutter, 0);
+}
+
+#[test]
+fn parse_inline_spec_width_with_gutter() {
+    let spec = inline::parse_inline_spec("60:4").unwrap();
+    assert_eq!(spec.format, InlineFormat::Auto);
+    assert_eq!(spec.width, Some(60));
+    assert_eq!(spec.gutter, 4);
+}
+
+#[test]
+fn parse_inline_spec_format_width_gutter() {
+    let spec = inline::parse_inline_spec("ansi:60:4").unwrap();
+    assert_eq!(spec.format, InlineFormat::Ansi);
+    assert_eq!(spec.width, Some(60));
+    assert_eq!(spec.gutter, 4);
+}
+
+#[test]
+fn parse_inline_spec_allows_zero_gutter() {
+    let spec = inline::parse_inline_spec("ansi:60:0").unwrap();
+    assert_eq!(spec.gutter, 0);
 }
 
 #[test]
@@ -212,6 +284,12 @@ fn parse_inline_spec_rejects_unknown_format() {
 }
 
 #[test]
+fn parse_inline_spec_rejects_too_many_segments() {
+    let err = inline::parse_inline_spec("ansi:60:4:7").unwrap_err();
+    assert!(err.to_string().contains("Invalid inline spec"));
+}
+
+#[test]
 fn parse_inline_spec_enforces_min_width() {
     let spec = inline::parse_inline_spec("5").unwrap();
     assert_eq!(spec.width, Some(20));
@@ -224,6 +302,7 @@ fn render_width_uses_explicit_width() {
     let spec = InlineSpec {
         format: InlineFormat::Auto,
         width: Some(60),
+        gutter: 0,
     };
     assert_eq!(inline::render_width(&spec, true), 60);
     assert_eq!(inline::render_width(&spec, false), 60);
@@ -234,6 +313,7 @@ fn render_width_defaults_to_80_when_not_terminal() {
     let spec = InlineSpec {
         format: InlineFormat::Auto,
         width: None,
+        gutter: 0,
     };
     assert_eq!(inline::render_width(&spec, false), 80);
 }
@@ -245,6 +325,7 @@ fn resolve_format_auto_terminal_is_ansi() {
     let spec = InlineSpec {
         format: InlineFormat::Auto,
         width: None,
+        gutter: 0,
     };
     assert_eq!(inline::resolve_format(&spec, true), ResolvedFormat::Ansi);
 }
@@ -254,6 +335,7 @@ fn resolve_format_auto_pipe_is_plain() {
     let spec = InlineSpec {
         format: InlineFormat::Auto,
         width: None,
+        gutter: 0,
     };
     assert_eq!(inline::resolve_format(&spec, false), ResolvedFormat::Plain);
 }
@@ -263,6 +345,7 @@ fn resolve_format_forced_ansi() {
     let spec = InlineSpec {
         format: InlineFormat::Ansi,
         width: None,
+        gutter: 0,
     };
     assert_eq!(inline::resolve_format(&spec, false), ResolvedFormat::Ansi);
 }
@@ -272,6 +355,7 @@ fn resolve_format_forced_plain() {
     let spec = InlineSpec {
         format: InlineFormat::Plain,
         width: None,
+        gutter: 0,
     };
     assert_eq!(inline::resolve_format(&spec, true), ResolvedFormat::Plain);
 }
@@ -288,7 +372,7 @@ fn write_lines_plain_outputs_text_only() {
         Span::styled("world", Style::default().fg(Color::Blue)),
     ])];
     let mut buf = Vec::new();
-    inline::write_lines(&lines, ResolvedFormat::Plain, 80, &mut buf).unwrap();
+    inline::write_lines(&lines, ResolvedFormat::Plain, 80, 0, &mut buf).unwrap();
     assert_eq!(String::from_utf8(buf).unwrap(), "hello world\n");
 }
 
@@ -302,7 +386,7 @@ fn write_lines_ansi_includes_escape_codes() {
         Style::default().fg(Color::Red),
     )])];
     let mut buf = Vec::new();
-    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, &mut buf).unwrap();
+    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, 0, &mut buf).unwrap();
     let output = String::from_utf8(buf).unwrap();
     assert!(output.contains("\x1b[31m"));
     assert!(output.contains("red"));
@@ -319,7 +403,7 @@ fn write_lines_ansi_handles_rgb_colors() {
         Style::default().fg(Color::Rgb(255, 128, 0)),
     )])];
     let mut buf = Vec::new();
-    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, &mut buf).unwrap();
+    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, 0, &mut buf).unwrap();
     let output = String::from_utf8(buf).unwrap();
     assert!(output.contains("\x1b[38;2;255;128;0m"));
 }
@@ -334,7 +418,7 @@ fn write_lines_ansi_handles_indexed_colors() {
         Style::default().fg(Color::Indexed(42)),
     )])];
     let mut buf = Vec::new();
-    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, &mut buf).unwrap();
+    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, 0, &mut buf).unwrap();
     let output = String::from_utf8(buf).unwrap();
     assert!(output.contains("\x1b[38;5;42m"));
 }
@@ -349,7 +433,60 @@ fn write_lines_ansi_handles_modifiers() {
         Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC),
     )])];
     let mut buf = Vec::new();
-    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, &mut buf).unwrap();
+    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, 0, &mut buf).unwrap();
     let output = String::from_utf8(buf).unwrap();
     assert!(output.contains("1;3m") || output.contains("1m") && output.contains("3m"));
 }
+
+// gutter tests
+
+#[test]
+fn write_lines_plain_prepends_gutter_each_line() {
+    use ratatui::text::Line;
+
+    let lines = vec![Line::from("first"), Line::from("second")];
+    let mut buf = Vec::new();
+    inline::write_lines(&lines, ResolvedFormat::Plain, 80, 4, &mut buf).unwrap();
+    assert_eq!(
+        String::from_utf8(buf).unwrap(),
+        "    first\n    second\n"
+    );
+}
+
+#[test]
+fn write_lines_plain_gutter_applies_to_wrapped_continuations() {
+    use ratatui::text::Line;
+
+    // Width 5, gutter 2: "abcdefghij" wraps at col 5 within content area.
+    let lines = vec![Line::from("abcdefghij")];
+    let mut buf = Vec::new();
+    inline::write_lines(&lines, ResolvedFormat::Plain, 5, 2, &mut buf).unwrap();
+    assert_eq!(String::from_utf8(buf).unwrap(), "  abcde\n  fghij\n");
+}
+
+#[test]
+fn write_lines_ansi_prepends_gutter_before_styles() {
+    use ratatui::style::{Color, Style};
+    use ratatui::text::{Line, Span};
+
+    let lines = vec![Line::from(vec![Span::styled(
+        "red",
+        Style::default().fg(Color::Red),
+    )])];
+    let mut buf = Vec::new();
+    inline::write_lines(&lines, ResolvedFormat::Ansi, 80, 3, &mut buf).unwrap();
+    let output = String::from_utf8(buf).unwrap();
+    // Gutter (raw spaces) comes before the SGR escape for the first span.
+    assert!(output.starts_with("   \x1b["));
+}
+
+#[test]
+fn write_lines_zero_gutter_matches_legacy_behavior() {
+    use ratatui::text::Line;
+
+    let lines = vec![Line::from("hello")];
+    let mut buf = Vec::new();
+    inline::write_lines(&lines, ResolvedFormat::Plain, 80, 0, &mut buf).unwrap();
+    assert_eq!(String::from_utf8(buf).unwrap(), "hello\n");
+}
+

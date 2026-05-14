@@ -83,7 +83,7 @@ pub(crate) fn usage_text() -> &'static str {
      \x20 -w, --watch                  Watch the file for changes and reload automatically\n\
      \x20     --theme <NAME>           Set color theme preset or custom config theme\n\
      \x20 -e, --editor <NAME>          Set external editor (nano|vim|code|subl|emacs)\n\
-     \x20     --inline [SPEC]          Render to stdout (no TUI) [ansi|plain][:<width>]\n\
+     \x20     --inline [SPEC]          Render to stdout (no TUI) [ansi|plain][:<width>[:<gutter>]]\n\
      \x20     --width <N>              Set maximum content width (min: 20)\n\
      \x20     --fuzzy [KEYWORD]        Open the fuzzy file picker (KEYWORD pre-fills the filter)\n\
      \x20     --picker                 Open the file browser picker\n\
@@ -216,6 +216,7 @@ pub(crate) fn parse_cli(args: &[String]) -> Result<CliOptions> {
                     _ => InlineSpec {
                         format: inline::InlineFormat::Auto,
                         width: None,
+                        gutter: 0,
                     },
                 };
                 options.inline = Some(spec);
