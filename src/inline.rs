@@ -28,52 +28,43 @@ pub(crate) enum ResolvedFormat {
     Plain,
 }
 
+/// Cheap predicate used by the CLI to decide whether a bare positional
+/// argument should be consumed as the `--inline` spec or treated as a file
+/// path. Recognises *intent* rather than full validity: anything that
+/// starts with the `ansi`/`plain` keyword or a bare numeric width is
+/// treated as an attempted spec. Detailed syntactic and semantic errors
+/// (too many segments, gutter >= width, etc.) are surfaced by
+/// `parse_inline_spec`, so a typo doesn't silently fall through to being
+/// interpreted as a filename.
 pub(crate) fn is_inline_spec(value: &str) -> bool {
-    if value.starts_with('-') || value.is_empty() {
+    if value.starts_with('-') {
         return false;
     }
-    let parts: Vec<&str> = value.split(':').collect();
-    let lower_first = parts[0].to_ascii_lowercase();
-    let first_is_fmt = lower_first == "ansi" || lower_first == "plain";
-    let first_is_digits =
-        !parts[0].is_empty() && parts[0].bytes().all(|b| b.is_ascii_digit());
-    if !first_is_fmt && !first_is_digits {
+    let head = value.trim().split(':').next().unwrap_or("");
+    if head.is_empty() {
         return false;
     }
-    let rest_start = if first_is_fmt { 1 } else { 0 };
-    let rest = &parts[rest_start..];
-    if rest.len() > 2 {
-        return false;
-    }
-    rest.iter()
-        .all(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+    let lower = head.to_ascii_lowercase();
+    lower == "ansi" || lower == "plain" || head.bytes().all(|b| b.is_ascii_digit())
 }
 
+/// Parse an `--inline` spec of the form `[fmt][:width[:gutter]]` where
+/// `fmt` is `ansi` or `plain` (case-insensitive) and `width`/`gutter` are
+/// non-negative integers. At least one segment must be present.
 pub(crate) fn parse_inline_spec(value: &str) -> Result<InlineSpec> {
     let value = value.trim();
-    if value.is_empty() {
-        bail!("Empty inline spec");
+    let (format, width_str, gutter_str) = lex_inline_spec(value)?;
+    let width = width_str.map(parse_width).transpose()?;
+    let gutter = gutter_str.map(parse_gutter).transpose()?.unwrap_or(0);
+
+    // A gutter that meets or exceeds the content width leaves zero columns
+    // for actual text and would soft-wrap every character forever. Reject
+    // it up-front rather than letting the renderer hang.
+    if let Some(w) = width {
+        if gutter >= w {
+            bail!("gutter ({gutter}) must be smaller than width ({w})");
+        }
     }
-
-    let parts: Vec<&str> = value.split(':').collect();
-    let first_is_digits =
-        !parts[0].is_empty() && parts[0].bytes().all(|b| b.is_ascii_digit());
-
-    let (format, num_parts): (InlineFormat, &[&str]) = if first_is_digits {
-        (InlineFormat::Auto, &parts[..])
-    } else {
-        (parse_format_name(parts[0])?, &parts[1..])
-    };
-
-    let (width, gutter) = match num_parts.len() {
-        0 => (None, 0),
-        1 => (Some(parse_width(num_parts[0])?), 0),
-        2 => (
-            Some(parse_width(num_parts[0])?),
-            parse_gutter(num_parts[1])?,
-        ),
-        _ => bail!("Invalid inline spec: {value} (expected [fmt][:width[:gutter]])"),
-    };
 
     Ok(InlineSpec {
         format,
@@ -82,12 +73,42 @@ pub(crate) fn parse_inline_spec(value: &str) -> Result<InlineSpec> {
     })
 }
 
-fn parse_format_name(name: &str) -> Result<InlineFormat> {
-    match name.to_ascii_lowercase().as_str() {
-        "ansi" => Ok(InlineFormat::Ansi),
-        "plain" => Ok(InlineFormat::Plain),
-        _ => bail!("Unknown inline format: {name} (expected 'ansi' or 'plain')"),
+/// Lexical pass over an inline spec: returns the format keyword and the
+/// (unparsed) width and gutter segments without performing any numeric or
+/// semantic validation. This is the single source of truth for what the
+/// CLI recognises as an inline spec versus a file path.
+fn lex_inline_spec(value: &str) -> Result<(InlineFormat, Option<&str>, Option<&str>)> {
+    if value.is_empty() {
+        bail!("Empty inline spec");
     }
+    let mut it = value.splitn(4, ':');
+    let head = it.next().expect("splitn yields at least one element");
+    if head.is_empty() {
+        bail!("Invalid inline spec: {value} (expected [fmt][:width[:gutter]])");
+    }
+
+    let (format, width_seg) = match head.to_ascii_lowercase().as_str() {
+        "ansi" => (InlineFormat::Ansi, it.next()),
+        "plain" => (InlineFormat::Plain, it.next()),
+        _ if head.bytes().all(|b| b.is_ascii_digit()) => (InlineFormat::Auto, Some(head)),
+        _ => bail!("Unknown inline format: {head} (expected 'ansi' or 'plain')"),
+    };
+
+    if let Some(w) = width_seg {
+        if w.is_empty() || !w.bytes().all(|b| b.is_ascii_digit()) {
+            bail!("Invalid width: {w}");
+        }
+    }
+    let gutter_seg = it.next();
+    if let Some(g) = gutter_seg {
+        if g.is_empty() || !g.bytes().all(|b| b.is_ascii_digit()) {
+            bail!("Invalid gutter: {g}");
+        }
+    }
+    if it.next().is_some() {
+        bail!("Invalid inline spec: {value} (expected [fmt][:width[:gutter]])");
+    }
+    Ok((format, width_seg, gutter_seg))
 }
 
 fn parse_width(s: &str) -> Result<usize> {
@@ -134,6 +155,10 @@ pub(crate) fn write_lines<W: Write>(
     gutter: usize,
     writer: &mut W,
 ) -> Result<()> {
+    // Defense in depth: parse_inline_spec already enforces gutter < width,
+    // but InlineSpec can also be constructed directly (e.g. bare --inline).
+    // Clamp here so a bad caller can never trigger an infinite soft-wrap.
+    let gutter = gutter.min(max_width.saturating_sub(1));
     let gutter_bytes = vec![b' '; gutter];
     for line in lines {
         match format {
@@ -338,3 +363,8 @@ fn write_extended_color<W: Write>(writer: &mut W, color: Color, bg: bool) -> Res
     let len = cur.position() as usize;
     write_bytes(writer, &buf[..len])
 }
+
+
+
+
+

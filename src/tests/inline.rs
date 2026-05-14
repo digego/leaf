@@ -290,6 +290,39 @@ fn parse_inline_spec_rejects_too_many_segments() {
 }
 
 #[test]
+fn parse_inline_spec_rejects_gutter_ge_width() {
+    let err = inline::parse_inline_spec("ansi:40:40").unwrap_err();
+    assert!(err.to_string().contains("gutter"));
+    let err = inline::parse_inline_spec("60:80").unwrap_err();
+    assert!(err.to_string().contains("gutter"));
+}
+
+#[test]
+fn parse_inline_spec_rejects_empty_first_segment() {
+    // Leading ':' would otherwise sneak past as an empty format name.
+    let err = inline::parse_inline_spec(":60").unwrap_err();
+    assert!(err.to_string().contains("Invalid inline spec"));
+}
+
+#[test]
+fn is_inline_spec_recognises_intent_even_when_invalid() {
+    // Lexically a spec attempt -- parse_inline_spec must surface the
+    // detailed error rather than the CLI silently treating these as
+    // filenames.
+    assert!(inline::is_inline_spec("ansi:60:4:7"));
+    assert!(inline::is_inline_spec("plain:30:40"));
+    assert!(inline::is_inline_spec("60:80"));
+}
+
+#[test]
+fn is_inline_spec_rejects_obvious_filenames() {
+    assert!(!inline::is_inline_spec("README.md"));
+    assert!(!inline::is_inline_spec("foo:bar"));
+    assert!(!inline::is_inline_spec(""));
+    assert!(!inline::is_inline_spec("-w"));
+}
+
+#[test]
 fn parse_inline_spec_enforces_min_width() {
     let spec = inline::parse_inline_spec("5").unwrap();
     assert_eq!(spec.width, Some(20));
@@ -489,4 +522,6 @@ fn write_lines_zero_gutter_matches_legacy_behavior() {
     inline::write_lines(&lines, ResolvedFormat::Plain, 80, 0, &mut buf).unwrap();
     assert_eq!(String::from_utf8(buf).unwrap(), "hello\n");
 }
+
+
 
