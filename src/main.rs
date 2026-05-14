@@ -435,17 +435,7 @@ fn main() -> Result<()> {
             file_mode,
             code_line_numbers,
         );
-        let mut lines = parsed.lines;
-
-        // The parser appends a handful of blank lines so the TUI can scroll
-        // past the last real line. For --inline that's just trailing
-        // whitespace, so trim it.
-        while lines
-            .last()
-            .is_some_and(|l| l.spans.iter().all(|s| s.content.trim().is_empty()))
-        {
-            lines.pop();
-        }
+        let lines = parsed.lines;
 
         let stdout = io::stdout();
         let mut writer = io::BufWriter::new(stdout.lock());
@@ -569,3 +559,4 @@ fn main() -> Result<()> {
     let restore_result = session.restore(&mut terminal);
     finish_with_restore(run_result, restore_result)
 }
+
