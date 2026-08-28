@@ -22,6 +22,7 @@ mod inline;
 mod markdown_blocks;
 mod markdown_embedded;
 mod markdown_footnotes;
+mod markdown_latex;
 mod markdown_links;
 mod markdown_list_blocks;
 mod markdown_lists;
@@ -96,3 +97,4 @@ pub(super) fn unique_temp_dir(prefix: &str) -> PathBuf {
         .as_nanos();
     std::env::temp_dir().join(format!("{prefix}-{unique}"))
 }
+

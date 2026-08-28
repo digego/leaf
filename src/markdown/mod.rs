@@ -4,6 +4,7 @@ mod footnotes;
 mod frontmatter;
 mod highlight;
 mod latex;
+mod latex_delim;
 mod links;
 mod lists;
 mod markers;
@@ -46,6 +47,7 @@ use blocks::{
     CODE_BLOCK_GUTTER,
 };
 use fences::normalize_code_fences;
+use latex_delim::normalize_latex_delimiters;
 use links::build_link_spans;
 use lists::{
     end_item, end_list, flush_list_item_spans, list_item_prefix, start_item, start_list, ItemState,
@@ -393,7 +395,16 @@ pub(crate) fn parse_markdown_with_width(
     let mut prev_event_end: usize = 0;
     let mut footnotes = footnotes::FootnotesBuf::default();
 
-    let normalized = normalize_code_fences(src);
+    // Two-stage source preprocessing before pulldown-cmark:
+    //   1. normalize_code_fences -- escape inner backtick runs so nested
+    //      fenced blocks parse correctly.
+    //   2. normalize_latex_delimiters -- rewrite standalone `\[`/`\]`
+    //      lines into `$$` so block LaTeX is recognised as DisplayMath.
+    // The second stage may reuse the first's allocation when no further
+    // change is needed; otherwise both stages collapse into a single
+    // owned String.
+    let fenced = normalize_code_fences(src);
+    let normalized: String = normalize_latex_delimiters(fenced.as_ref()).into_owned();
     let line_starts = compute_line_starts(&normalized);
     let parser_options = Options::all()
         - Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
@@ -926,4 +937,7 @@ pub(crate) fn append_scroll_padding(lines: &mut Vec<Line<'static>>) {
         lines.push(Line::from(""));
     }
 }
+
+
+
 
