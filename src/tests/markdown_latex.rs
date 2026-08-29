@@ -9,8 +9,8 @@ fn bracket_form_renders_identically_to_dollar_form() {
     let bracket = "Lead-in line.\n\n\\[\nx = y + z\n\\]\n\nTrailing line.\n";
     let dollar = "Lead-in line.\n\n$$\nx = y + z\n$$\n\nTrailing line.\n";
 
-    let (lhs, _, _) = parse_markdown(bracket, &ss, &theme, &test_md_theme(), false);
-    let (rhs, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false);
+    let (lhs, _, _, _) = parse_markdown(bracket, &ss, &theme, &test_md_theme(), false, true).into();
+    let (rhs, _, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false, true).into();
 
     let lhs_rendered = rendered_non_empty_lines(&lhs);
     let rhs_rendered = rendered_non_empty_lines(&rhs);
@@ -32,8 +32,8 @@ fn indented_bracket_delimiters_are_recognised() {
     let src = "Intro.\n\n    \\[\n    a = b\n    \\]\n\nOutro.\n";
     let dollar = "Intro.\n\n$$\na = b\n$$\n\nOutro.\n";
 
-    let (lhs, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
-    let (rhs, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false);
+    let (lhs, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
+    let (rhs, _, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false, true).into();
 
     // Both should produce a recognised latex block; only check for the
     // presence of the latex header rather than exact equality since the
@@ -52,7 +52,7 @@ fn fenced_code_block_protects_bracket_delimiters() {
     let (ss, theme) = test_assets();
     let src = "Example:\n\n```text\n\\[\nthis is shown as-is\n\\]\n```\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
     let joined = rendered.join("\n");
@@ -78,7 +78,7 @@ fn inline_escaped_brackets_in_prose_are_untouched() {
     // pulldown-cmark resolves `\[` to a literal `[` in the Text event.
     let src = "See appendix \\[A\\] for details.\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
     let joined = rendered.join("\n");
@@ -100,7 +100,7 @@ fn sources_without_latex_delimiters_are_unchanged() {
     let (ss, theme) = test_assets();
     let src = "# Title\n\nA paragraph with no math at all.\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(rendered.iter().any(|l| l.contains("Title")));
@@ -121,8 +121,8 @@ fn inline_paren_form_matches_dollar_form() {
     let paren = "Consider \\(x = y + z\\) in this case.\n";
     let dollar = "Consider $x = y + z$ in this case.\n";
 
-    let (lhs, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false);
-    let (rhs, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false);
+    let (lhs, _, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false, true).into();
+    let (rhs, _, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false, true).into();
 
     assert_eq!(rendered_non_empty_lines(&lhs), rendered_non_empty_lines(&rhs));
 }
@@ -134,8 +134,8 @@ fn multiple_inline_spans_on_one_line() {
     let paren = "We have \\(a\\) and \\(b\\) together.\n";
     let dollar = "We have $a$ and $b$ together.\n";
 
-    let (lhs, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false);
-    let (rhs, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false);
+    let (lhs, _, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false, true).into();
+    let (rhs, _, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false, true).into();
 
     assert_eq!(rendered_non_empty_lines(&lhs), rendered_non_empty_lines(&rhs));
 }
@@ -147,7 +147,7 @@ fn inline_paren_inside_code_span_is_untouched() {
     let (ss, theme) = test_assets();
     let src = "The literal text `\\(x\\)` is shown as-is.\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let joined = rendered_non_empty_lines(&lines).join("\n");
 
     assert!(
@@ -162,7 +162,7 @@ fn inline_paren_inside_fenced_code_is_untouched() {
     let (ss, theme) = test_assets();
     let src = "```text\nuse \\(x\\) for inline math\n```\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let joined = rendered_non_empty_lines(&lines).join("\n");
 
     assert!(
@@ -179,7 +179,7 @@ fn unmatched_inline_opener_is_left_intact() {
     // `\(` resolves through standard Markdown escapes to a literal `(`.
     let src = "An opener with no closer: \\(x is fine.\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let joined = rendered_non_empty_lines(&lines).join("\n");
 
     // pulldown-cmark's text escape turns `\(` into `(` in the rendered
@@ -200,7 +200,7 @@ fn double_backslash_paren_is_not_a_math_opener() {
     // Standard Markdown reads this as a literal `\` + `(x` + literal `\` + `)`.
     let src = "Literal backslash-paren: \\\\(x\\\\) here.\n";
 
-    let (lines, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false);
+    let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let joined = rendered_non_empty_lines(&lines).join("\n");
 
     assert!(
@@ -217,8 +217,8 @@ fn triple_backslash_paren_is_a_math_opener() {
     let paren = "Edge: \\\\\\(x\\\\\\) end.\n";
     let dollar = "Edge: \\\\$x\\\\$ end.\n";
 
-    let (lhs, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false);
-    let (rhs, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false);
+    let (lhs, _, _, _) = parse_markdown(paren, &ss, &theme, &test_md_theme(), false, true).into();
+    let (rhs, _, _, _) = parse_markdown(dollar, &ss, &theme, &test_md_theme(), false, true).into();
 
     assert_eq!(rendered_non_empty_lines(&lhs), rendered_non_empty_lines(&rhs));
 }
